@@ -1,18 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import io from "socket.io-client";
-
-// Daily motivational quotes
-const quotes = [
-  "Sow today, reap tomorrow! 🌱",
-  "Patience is key to growth. 🌾",
-  "Healthy soil, healthy crop. 🌿",
-  "Farm smart, earn smart. 💰",
-  "Nature always rewards diligence. 🌤️",
-];
-
-let socket;
+import { io } from "socket.io-client";
 
 export default function Dashboard() {
   const [marketPrices, setMarketPrices] = useState([]);
@@ -28,13 +17,6 @@ export default function Dashboard() {
   });
   const [language, setLanguage] = useState("en");
   const [city, setCity] = useState(""); // user can select or auto-detect
-  const [dailyQuote, setDailyQuote] = useState("");
-
-  // Random daily quote
-  useEffect(() => {
-    const index = Math.floor(Math.random() * quotes.length);
-    setDailyQuote(quotes[index]);
-  }, []);
 
   // Fetch market prices
   useEffect(() => {
@@ -53,12 +35,7 @@ export default function Dashboard() {
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
           );
           const geoData = await geoRes.json();
-          setCity(
-            geoData.address.city ||
-              geoData.address.town ||
-              geoData.address.village ||
-              "Delhi"
-          );
+          setCity(geoData.address.city || geoData.address.town || "Delhi");
         },
         (error) => console.warn("Geolocation failed:", error),
         { enableHighAccuracy: true }
@@ -75,20 +52,24 @@ export default function Dashboard() {
         setWeather(data);
       };
       fetchWeather();
-      const weatherInterval = setInterval(fetchWeather, 10 * 60 * 1000); // refresh every 10 min
+      const weatherInterval = setInterval(fetchWeather, 10 * 60 * 1000);
       return () => clearInterval(weatherInterval);
     }
   }, [city]);
 
-  // Connect to Socket.IO server for live IoT
+  // Connect to Socket.IO for live IoT feed
   useEffect(() => {
-    socket = io("http://localhost:4000"); // adjust your IoT server URL
+    const socket = io("http://localhost:4000"); // connect to your server.js
     socket.on("connect", () => console.log("Connected to IoT server"));
-    socket.on("iotUpdate", (data) => setIotData(data));
+
+    socket.on("iotUpdate", (data) => {
+      setIotData(data);
+    });
+
     return () => socket.disconnect();
   }, []);
 
-  // Translate advice based on language
+  // Function to translate advice based on language
   const translateAdvice = (adviceArray) => {
     if (language === "hi") {
       return adviceArray.map((item) =>
@@ -99,36 +80,21 @@ export default function Dashboard() {
           .replace("Rain expected soon", "जल्द बारिश होने की संभावना")
           .replace("High temperature detected", "उच्च तापमान का पता चला")
           .replace("Low temperature detected", "कम तापमान का पता चला")
-          .replace(
-            "Conditions suitable for water-loving crops",
-            "जल पसंद फसलों के लिए अनुकूल परिस्थितियाँ"
-          )
-          .replace(
-            "Consider drought-resistant crops",
-            "सूखा प्रतिरोधी फसलों पर विचार करें"
-          )
-          .replace(
-            "Current conditions suitable for seasonal vegetables",
-            "मौजूदा परिस्थितियाँ मौसमी सब्जियों के लिए उपयुक्त हैं"
-          )
+          .replace("Conditions suitable for water-loving crops", "जल पसंद फसलों के लिए अनुकूल परिस्थितियाँ")
+          .replace("Consider drought-resistant crops", "सूखा प्रतिरोधी फसलों पर विचार करें")
+          .replace("Current conditions suitable for seasonal vegetables", "मौजूदा परिस्थितियाँ मौसमी सब्जियों के लिए उपयुक्त हैं")
       );
     }
-    return adviceArray;
+    return adviceArray; // default English
   };
 
   return (
-    <div
-      className="min-h-screen p-6 bg-green-100 bg-cover bg-center"
-      style={{ backgroundImage: "url('/happy-farmer-bg.jpg')" }}
-    >
-      <div className="max-w-5xl mx-auto backdrop-blur-sm bg-white/70 rounded-lg p-6 shadow-lg">
-        <h1 className="text-3xl font-bold mb-2 text-center">
-          {language === "en" ? "Welcome to AGRINOVA 🌾" : "AGRINOVA में आपका स्वागत है 🌾"}
-        </h1>
-        <p className="text-center italic mb-6">{dailyQuote}</p>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <h1 className="text-2xl font-bold mb-4">🌾 AGRINOVA Farmer Dashboard</h1>
 
-        {/* Language & City */}
-        <div className="flex justify-center gap-4 mb-6">
+        <div className="mb-4">
+          <label className="mr-2">Select Language / भाषा:</label>
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
@@ -137,75 +103,69 @@ export default function Dashboard() {
             <option value="en">English</option>
             <option value="hi">हिंदी</option>
           </select>
+        </div>
+
+        <div className="mb-4">
+          <label className="mr-2">City / शहर:</label>
           <input
             type="text"
-            placeholder={language === "en" ? "Enter city" : "शहर दर्ज करें"}
+            placeholder="Enter city (override GPS)"
             value={city}
             onChange={(e) => setCity(e.target.value)}
-            className="p-2 border rounded-lg"
+            className="p-2 border rounded-lg w-full"
           />
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Weather Card */}
-          <Card className="shadow-lg p-4">
-            <h2 className="text-xl font-semibold mb-2">
-              {language === "en" ? "☁️ Weather Updates" : "☁️ मौसम अपडेट"} ({city || "Detecting..."})
-            </h2>
-            {weather ? (
-              <div>
-                <p>{language === "en" ? "Temperature" : "तापमान"}: {weather.temp}°C</p>
-                <p>{language === "en" ? "Rainfall" : "वर्षा"}: {weather.rainfall} mm</p>
-                <p>{language === "en" ? "Forecast" : "पूर्वानुमान"}: {weather.forecast}</p>
-              </div>
-            ) : (
-              <p>{city ? (language === "en" ? "Loading live weather..." : "लाइव मौसम लोड हो रहा है...") : (language === "en" ? "Detecting your city..." : "आपका शहर पता किया जा रहा है...")}</p>
-            )}
-          </Card>
-
-          {/* IoT Card */}
-          <Card className="shadow-lg p-4">
-            <h2 className="text-xl font-semibold mb-2">
-              {language === "en" ? "📡 Live IoT Data & Advice" : "📡 लाइव IoT डेटा और सुझाव"}
-            </h2>
-            <p>{language === "en" ? "Humidity" : "नमी"}: {iotData.humidity}%</p>
-            <p>{language === "en" ? "Soil Moisture" : "मिट्टी की नमी"}: {iotData.moisture}%</p>
-            <p>{language === "en" ? "Temperature" : "तापमान"}: {iotData.temperature}°C</p>
-            <p>{language === "en" ? "Soil Status" : "मिट्टी की स्थिति"}: {iotData.soilStatus}</p>
-            <p>{language === "en" ? "Water Logging" : "पानी जमा"}: {iotData.waterLogging ? "Yes" : "No"}</p>
-            <p>{language === "en" ? "Rain Expected" : "बारिश की संभावना"}: {iotData.rainExpected ? "Yes" : "No"}</p>
-
-            <div className="mt-2">
-              <h3 className="font-semibold">{language === "en" ? "Advice:" : "सुझाव:"}</h3>
-              <ul className="list-disc list-inside">
-                {translateAdvice(iotData.advice).map((item, idx) => (
-                  <li key={idx}>{item}</li>
-                ))}
-              </ul>
+        <Card className="mb-4 shadow-lg">
+          <h2 className="text-xl font-semibold mb-2">☁️ Weather Updates ({city || "Detecting..."})</h2>
+          {weather ? (
+            <div>
+              <p>Temperature: {weather.temp}°C</p>
+              <p>Rainfall: {weather.rainfall} mm</p>
+              <p>Forecast: {weather.forecast}</p>
             </div>
-          </Card>
+          ) : (
+            <p>{city ? "Loading live weather..." : "Detecting your city..."}</p>
+          )}
+        </Card>
 
-          {/* Market Prices */}
-          <Card className="shadow-lg p-4 md:col-span-2">
-            <h2 className="text-xl font-semibold mb-2">
-              {language === "en" ? "💰 Market Prices" : "💰 बाजार की कीमतें"}
-            </h2>
-            <ul>
-              {marketPrices.length > 0 ? (
-                marketPrices.map((item, idx) => (
-                  <li key={idx} className="p-2 border-b">
-                    {item.crop}: ₹{item.price}/quintal ({item.mandi})
-                  </li>
-                ))
-              ) : (
-                <p>{language === "en" ? "Fetching live prices..." : "लाइव कीमतें लोड हो रही हैं..."}</p>
-              )}
+        <Card className="mb-4 shadow-lg">
+          <h2 className="text-xl font-semibold mb-2">📡 Live IoT Data & Advice</h2>
+          <p>Humidity: {iotData.humidity}%</p>
+          <p>Soil Moisture: {iotData.moisture}%</p>
+          <p>Temperature: {iotData.temperature}°C</p>
+          <p>Soil Status: {iotData.soilStatus}</p>
+          <p>Water Logging: {iotData.waterLogging ? "Yes" : "No"}</p>
+          <p>Rain Expected: {iotData.rainExpected ? "Yes" : "No"}</p>
+          <div className="mt-2">
+            <h3 className="font-semibold">Advice:</h3>
+            <ul className="list-disc list-inside">
+              {translateAdvice(iotData.advice).map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
             </ul>
-            <Button className="mt-4 w-full">
-              {language === "en" ? "Sell Crop in Best Mandi" : "सबसे अच्छी मंडी में बेचें"}
-            </Button>
-          </Card>
-        </div>
+          </div>
+        </Card>
+      </div>
+
+      <div>
+        <Card className="shadow-lg">
+          <h2 className="text-xl font-semibold mb-2">💰 Market Prices</h2>
+          <ul>
+            {marketPrices.length > 0 ? (
+              marketPrices.map((item, idx) => (
+                <li key={idx} className="p-2 border-b">
+                  {item.crop}: ₹{item.price}/quintal (in {item.mandi})
+                </li>
+              ))
+            ) : (
+              <p>Fetching live prices...</p>
+            )}
+          </ul>
+          <Button className="mt-4 w-full">
+            {language === "en" ? "Sell Crop in Best Mandi" : "सबसे अच्छी मंडी में बेचें"}
+          </Button>
+        </Card>
       </div>
     </div>
   );
